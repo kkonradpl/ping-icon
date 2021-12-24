@@ -27,16 +27,18 @@ $ sudo make install
 in the `build` directory.
 
 # Usage
-```ping-icon [-r icon-name] [-u icon-name] [-i interval] [-t timeout] hostname
+```sh
+$ ping-icon -h
+Usage: ping-icon [-r icon-name] [-u icon-name] [-i interval] [-t timeout] hostname
 
 Options:
   -r  icon name for reachable state
   -u  icon name for unreachable state
   -i  interval (default: 60 s)
   -t  timeout  (default: 5 s)
-```
 
 If both icons are unspecified, only reachable icon "computer" is used.
+```
 
 # What's it?
 Sometimes I forgot to turn off my desktop computer after powering it on remotely. As the price of electricity is getting higher and higher, I wrote this small app to display an icon in the system tray when the host is up. Just to make sure to power it off, when it is no longer needed.
