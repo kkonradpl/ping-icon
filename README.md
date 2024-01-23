@@ -1,4 +1,4 @@
-ping-icon-qt
+ping-icon
 =======
 
 System tray icon for a remote host.
@@ -12,7 +12,7 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY 
 
 # Usage
 ```sh
-$ ping-icon -h
+$ ping-icon-qt -h
 Usage: ping-icon-qt [-r name] [-u name] [-i interval] [-t timeout] hostname
 
 Options:
