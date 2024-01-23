@@ -1,0 +1,165 @@
+#!/usr/bin/env python3
+from PySide2 import QtWidgets, QtGui
+from PySide2.QtCore import QObject, QProcess, QThread, Signal
+from dataclasses import dataclass
+import getopt
+import signal
+import os
+import sys
+import time
+
+DEFAULT_ICON_NAME = "computer"
+DEFAULT_INTERVAL  = 60
+DEFAULT_TIMEOUT   = 5
+
+@dataclass
+class PingIconConf:
+    hostname: str = None
+    icon_reachable: str = None
+    icon_unreachable: str = None
+    interval: int = DEFAULT_INTERVAL
+    timeout: int = DEFAULT_TIMEOUT
+
+
+class PingWorker(QObject):
+    state = Signal(int)
+    finished = Signal()
+
+    def __init__(self, hostname, interval, timeout):
+        super().__init__()
+        self.hostname = hostname
+        self.interval = interval
+        self.timeout = timeout
+
+    def run(self):
+        while True:
+            ts = int(time.time())
+
+            p = QProcess(self)
+            p.start("ping", ["-c", "1", "-w", str(self.timeout), self.hostname])
+            p.waitForFinished(-1)
+
+            self.state.emit(int(p.exitCode() == 0))
+
+            delay = self.interval - (int(time.time()) - ts);
+            if delay > 0:
+                QThread.sleep(delay)
+
+
+class PingIcon(QtWidgets.QSystemTrayIcon):
+    def __init__(self, conf, parent=None):
+        QtWidgets.QSystemTrayIcon.__init__(self, None, parent)
+        self.hostname = conf.hostname
+        self.icon_reachable = QtGui.QIcon.fromTheme(conf.icon_reachable) if conf.icon_reachable else None
+        self.icon_unreachable = QtGui.QIcon.fromTheme(conf.icon_unreachable) if conf.icon_unreachable else None
+        self.state = -1
+        self.thread = QThread()
+        self.worker = PingWorker(conf.hostname, conf.interval, conf.timeout)
+
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+        self.worker.state.connect(self.updateState)
+        self.thread.start()
+
+    def updateState(self, newState):
+        if self.state == newState:
+            return
+
+        if newState:
+            if not self.icon_reachable:
+                self.setVisible(False)
+            else:
+                self.setIcon(self.icon_reachable)
+                self.setVisible(True)
+                self.setToolTip(self.hostname + " is up")
+        else:
+            if not self.icon_unreachable:
+                self.setVisible(False)
+            else:
+                self.setIcon(self.icon_unreachable)
+                self.setVisible(True)
+                self.setToolTip(self.hostname + " is down")
+
+        self.state = newState;
+
+
+def show_usage():
+    print("Usage: ping-icon [-r name] [-u name] [-i interval] [-t timeout] hostname")
+    print("Options:")
+    print("  -r  icon name for reachable state")
+    print("  -u  icon name for unreachable state")
+    print("  -i  interval (default: " + str(DEFAULT_INTERVAL) + " s)")
+    print("  -t  timeout  (default: " + str(DEFAULT_TIMEOUT) + " s)")
+    print("If both icons are unspecified, only reachable icon \"" + DEFAULT_ICON_NAME + "\" is used.")
+
+
+def parse_args():
+    conf = PingIconConf()
+
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "hr:u:i:t:")
+    except getopt.GetoptError as err:
+        show_usage()
+        sys.exit(-1)
+
+    for opt, optarg in opts:
+        if opt  == "-h":
+            show_usage()
+        elif opt == "-r":
+            conf.icon_reachable = optarg
+        elif opt == "-u":
+            conf.icon_unreachable = optarg
+        elif opt == "-i":
+            conf.interval = int(optarg)
+        elif opt == "-t":
+            conf.timeout = int(optarg)
+        else:
+            assert False, "unhandled option"
+
+    hostnames = len(args)
+    if hostnames == 0:
+        show_usage()
+        print("No hostname specified.")
+        sys.exit(-1)
+
+    if hostnames > 1:
+        show_usage()
+        print("Multiple hostnames are not supported.")
+        sys.exit(-1)
+
+    conf.hostname = args[0]
+
+    if conf.interval <= 1:
+        print("Invalid interval given, using default (" + DEFAULT_INTERVAL + " s).")
+        conf.interval = DEFAULT_INTERVAL
+
+    if conf.timeout <= 0:
+        print("Invalid timeout given, using default (" + DEFAULT_TIMEOUT + " s).")
+        conf.timeout = DEFAULT_TIMEOUT
+
+    if conf.interval < conf.timeout:
+        print("Interval must be greater than timeout, using default values (" + DEFAULT_INTERVAL + "/" + DEFAULT_TIMEOUT + " s)")
+        conf.interval = DEFAULT_INTERVAL
+        conf.timeout = DEFAULT_TIMEOUT
+
+    if (not conf.icon_reachable and not conf.icon_unreachable):
+        conf.icon_reachable = DEFAULT_ICON_NAME
+
+    return conf
+
+
+def main():
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+    conf = parse_args()
+    app = QtWidgets.QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
+    widget = QtWidgets.QWidget()
+    ping_icon = PingIcon(conf, widget)
+    sys.exit(app.exec_())
+
+if __name__ == '__main__':
+    main()
