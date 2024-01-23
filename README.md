@@ -14,8 +14,8 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY 
 In order to build ping-icon you will need:
 
 - CMake
-- C compiler
-- GTK+ 3 & dependencies
+- C++ compiler
+- gtkmm 3 & dependencies
 
 Once you have all the necessary dependencies, you can use the `build.sh` script in the `build` directory.
 
